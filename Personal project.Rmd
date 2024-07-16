@@ -1,0 +1,188 @@
+---
+title: 'Personal Project: Binary and Count Regression'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+We will look at extending linear models to situations where the response variable is binary (logistic) or count (Poisson). We will study how to choose the most appropriate model when there are multiple covariates.
+
+**We learn to use the following functions:**
+
+`glm` for fitting generalised linear models (such as the logistic and poisson regression models).
+
+## Logistic regression model
+
+This required fitting a model where
+$$ \log \frac{p}{1-p} = b_0 + b_1 x_1 + \cdots + b_p x_p $$
+where $p$ is the probability that the observation is a $1$ and $1-p$ is the probability that the observation is a $0$.
+
+
+
+## Space shuttle
+
+Space shuttles made by NASA had components called O-rings.  The data below shows the temperature (in Farenheit) and whether or not all the O-rings functioned properly on each of the first 23 space shuttle flights.
+
+```{r}
+temp<-c(53,57,58,63,66,67,67,67,68,69,70,70,70,70,72,73,75,75,76,76,78,79,81)
+success<-c(0,0,0,0,1,1,1,1,1,1,1,1,0,0,1,1,1,0,1,1,1,1,1)
+```
+
+Let $p_i$ be the probability that the $i$th flight is successful (i.e. no O-ring failures).  A simple logistic regression model is
+$$  \log \frac{p_i}{1-p_i} = b_0 + b_1 x_i $$
+where $x_i$ is the temperature of the $i$th flight.
+
+```{r}
+model<-glm(success~temp,family="binomial") # fit a generalised linear model with a binary response variable - i.e. a logistic model
+summary(model) # look at a summary of the model output
+```
+
+We note that the coefficient estimate for temperature is positive, so higher temperature means higher probability of success.  Also, the $p$-value is less than $0.05$ so we conclude that this is a significant effect - there is evidence that the the coefficient for temperature is NOT zero.
+
+We can use the model for prediction by noting that
+$$ \hat{p} = \frac{ e^{b_0 + b_1 x} }{ 1+e^{b_0 + b_1 x} }. $$
+```{r}
+pred<-predict(model,newdata=data.frame(temp=c(50:90)),type="response") # predict the probability of success for temperatures in the range 50 to 90 degrees
+plot(temp,success,xlim=c(50,90),xlab="Temperature",ylab="Flight success") # plot the original data
+lines(c(50:90),pred) # add a line to show the predicted probability of success
+```
+
+*1. On 23rd January 1986 the next space shuttle took off in temperatures of 31 degrees Farenheit.  Use your model to predict the probability that all the O-rings will function correctly at this temperature?  Based on your model what advice would you have given to the Launch Control Center ahead of the flight?*
+
+```{r}
+pred<-predict(model,newdata=data.frame(temp=31),type="response")
+pred
+```
+
+The probability that all the O-rings will function correctly is `r pred`, which is very small. Recommendation would be to defer the shuttle launch until the temperature increases.
+
+## Heart disease
+
+The code below fits a logistic model to predict the occurence of coronary heart disease (chd) based on other variables: systolic blood pressure (sbp), tobacco intake, cholestoral (ldl), adiposity, family history of heart disease, psycho-social stress (typea), obesity, alcohol intake and age. This goes beyond measuring chd against age in the lecture example.
+
+```{r}
+data<-read.csv("HeartDisease.csv") # read in the data
+model<-glm(chd~.,data=data,family="binomial") # fit a logistic model with chd as the response variable and all other variables as covariates
+summary(model)
+```
+
+*2. Use the step function to see if some of the covariates can be removed.  Of the remaining variables which increase the risk of heart disease and which reduce it?*
+
+```{r}
+bestmodel<-step(model)
+summary(bestmodel)
+```
+
+We find that there are five covariates remaining in the model; tobacco, ldl (cholestoral), famhistPresent (family history), typea and age. All these covariates have a **positive** coefficient meaning that the presence of these covariates (family history) or increasing values of the covariates (other covariates) increase the chance of chd.
+
+*3. Fit another logistic model that just uses systolic blood pressure as a covariate.  Does high blood pressure increase the risk of heart disease?  Does this finding contradict your previous model?  Explain.*
+
+```{r}
+model<-glm(chd~sbp,data=data,family="binomial")
+summary(model)
+```
+
+The model shows that systolic blood pressure (sbp) is important in predicting chd ($p$-value $<0.0001$). This does not contradict the earlier model which included more covariates as the increase in sbp could be explained by other covariates such as age which lead to increases in both sbp and risk of chd.
+
+
+## Family Growth
+
+Load the cleaned family growth data set.  We will use logistic regression to model whether a pregnancy results in a live birth or not.  To do this we keep live births as outcome=1, and replace all other outcomes with outcome=0.
+
+```{r}
+data<-read.csv("FamilyGrowth_Clean.csv") # Load the cleaned version of the dataset that we created in week 3.
+data$outcome[data$outcome>1]<-0 # Replace any outcome > 1 with a 0.
+```
+
+*4. Fit a logistic regression model with pregnancy length as the covariate.  Use your model to plot the probability that a pregnancy will result in a live birth against the pregnancy length.*
+
+```{r}
+model<-glm(outcome~preglength,data=data,family="binomial")
+summary(model)
+pred<-predict(model,newdata=data.frame(preglength=c(0:50)),type="response")
+plot(c(0:50),pred,type="l",xlab="Pregnancy length",ylab="Probability of live birth")
+```
+
+We find that the probability of a live birth increases with pregnancy length as we would expect.
+
+Suppose we fitted a logistic model with the age of the mother as a covariate.  If the coefficient is positive it implies waiting until old age is optimal for child birth, whereas if the coefficient is negative it implies having children when the mother is a child is optimal.  Neither of these conclusions make medical sense.  The code below fits a logistic model with a quadratic term in the age of the mother.
+
+```{r}
+model<-glm(outcome~agepreg+I(agepreg^2),data=data,family="binomial") # fit a logistic model with agepreg and agepreg^2 as covariates
+summary(model)
+```
+
+*5. Use the model to plot the probability that a pregnancy will result in a live birth against the age of the mother.  What is the optimal age for a pregnancy to result in a live birth?*
+
+```{r}
+pred<-predict(model,newdata=data.frame(agepreg=c(0:60)),type="response")
+plot(c(0:60),pred,type="l",xlab="Mother's age",ylab="Probability of live birth")
+
+```
+
+The plot suggests that the optimal age for pregnancy is around 29 years old where the predicted probability of a live birth is 0.7531.
+
+## Poisson Regression
+
+We now turn to count data where the response variable $y$ is a count. We can model $y$ given covariates $\mathbf{x} = (x_1, x_2, \ldots, x_p)$ as
+\[ y |\beta, \mathbf{x} \sim \mathrm{Po} \left( \exp \left( \beta_0 + \beta_1 x_1 + \ldots \beta_p x_p \right) \right). \]
+
+The NMES1988 data set is a cross-sectional data set originating from the US National Medical Expenditure Survey (NMES) conducted in 1987 and 1988. The data set is available in the **R** package **AER** and we have provided it here as a csv file.
+
+The data consists of over 4000 individuals aged 66 and over whom were covered by Medicare. The response variable $y$, is **visits** the number of visits to a physician's office. There are 18 other variables in the data set. Full details are available at: https://www.rdocumentation.org/packages/AER/versions/1.2-9/topics/NMES1988
+
+Load in the NMES1988 data set.
+```{r}
+data<-read.csv("NMES1988.csv") # Load in the NMES1988 data
+```
+
+*6. Fit a Poisson regression model with chronic as the covariate. Note that chronic is the number of chronic conditions an individual has. Does the number of chronic conditions affect the number of visits to a physician?*
+
+```{r}
+model<-glm(visits~chronic,data=data,family="poisson")
+summary(model)
+```
+
+We can see that the coefficient for number of chronic conditions is positive as we would expect. (More chronic conditions, more visits to a Physician.) The effect is very significant.
+
+
+*7. For $x=0,1,\ldots,8$, plot the observed mean number of visits and the expected number of visits given by the model to a physician for an individual with $x$ chronic conditions. Comment on the plot.*
+
+```{r}
+xx=seq(0,8) # Number of chronic conditions
+obs_mean=rep(NA,9)
+for(i in 1:length(xx)) obs_mean[i]=mean(data$visits[data$chronic==xx[i]]) # Observed mean number of visits
+exp_mean=exp(model$coefficients[1]+model$coefficients[2]*xx) # Expected number of visits from the Poisson model
+plot(xx,obs_mean,ylim=c(0,max(obs_mean,exp_mean)),xlab="Number of chronic conditions",ylab="Physician Visits")
+points(xx,exp_mean,pch=22,col=2)
+
+chronic_sum=0
+for(i in 1:length(xx)) chronic_sum[i]=sum(data$chronic==xx[i])
+chronic_sum
+```
+
+The plot shows good agreement between the mean observed number of visits and the expected number of visits for individuals with between 0 and 5 chronic conditions, inclusive. For 6 or more chronic conditions the expected number of visits are quite a bit higher than the observed mean number of visits. This is in large part due to very few people having 6 or more chronic conditions, so that the observed means are based on very small samples (34, 6 and 3 individuals, respectively, for 6, 7 and 8 chronic conditions). This helps explain the particularly big discrepancy between the observed and expected numbers of visits for those with 8 chronic conditions. 
+
+*8. Fit a Poisson regression model for the number of visits to a Physician including all covariates. Which covariates are not significant at a 5% significance level?*
+
+```{r}
+model<-glm(visits~.,data=data,family="poisson")
+summary(model)
+```
+
+Almost all covariates are significant with ovisits, emergency and income not significant. Note region Other is not significantly different to the baseline region Midwest.
+
+
+*9. Use the step function to see if some of the covariates can be removed.  Of the remaining variables which increase the number of visits?*
+
+```{r}
+bestmodel<-step(model)
+summary(bestmodel)
+```
+In the final model, the following covariates have a positive effect: nvisits, novisits, hospital (all of these refer to different types of medical visits), healthpoor (baseline average), chronic (number of chronic conditions), region (categorical variable with baseline Midwest), school (years of education), employedyes, insuranceyes and medicaidyes.
